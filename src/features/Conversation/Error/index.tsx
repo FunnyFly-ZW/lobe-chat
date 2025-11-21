@@ -1,3 +1,5 @@
+import { AgentRuntimeErrorType, ILobeAgentRuntimeErrorType } from '@lobechat/model-runtime';
+import { ChatErrorType, ChatMessageError, ErrorType, UIChatMessage } from '@lobechat/types';
 import { IPluginErrorType } from '@lobehub/chat-plugin-sdk';
 import type { AlertProps } from '@lobehub/ui';
 import { Skeleton } from 'antd';
@@ -6,20 +8,18 @@ import { Suspense, memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useProviderName } from '@/hooks/useProviderName';
-import { AgentRuntimeErrorType, ILobeAgentRuntimeErrorType } from '@/libs/agent-runtime';
-import { ChatErrorType, ErrorType } from '@/types/fetch';
-import { ChatMessage, ChatMessageError } from '@/types/message';
 
+import ChatInvalidAPIKey from './ChatInvalidApiKey';
 import ClerkLogin from './ClerkLogin';
 import ErrorJsonViewer from './ErrorJsonViewer';
-import InvalidAPIKey from './InvalidAPIKey';
 import InvalidAccessCode from './InvalidAccessCode';
 import { ErrorActionContainer } from './style';
 
 const loading = () => <Skeleton active />;
 
 const OllamaBizError = dynamic(() => import('./OllamaBizError'), { loading, ssr: false });
-const OllamaSetupGuide = dynamic(() => import('./OllamaBizError/SetupGuide'), {
+
+const OllamaSetupGuide = dynamic(() => import('@/features/OllamaSetupGuide'), {
   loading,
   ssr: false,
 });
@@ -54,7 +54,9 @@ const getErrorAlertConfig = (
     }
 
     case AgentRuntimeErrorType.OllamaServiceUnavailable:
-    case AgentRuntimeErrorType.NoOpenAIAPIKey: {
+    case AgentRuntimeErrorType.NoOpenAIAPIKey:
+    case AgentRuntimeErrorType.ComfyUIServiceUnavailable:
+    case AgentRuntimeErrorType.InvalidComfyUIArgs: {
       return {
         extraDefaultExpand: true,
         extraIsolate: true,
@@ -85,14 +87,13 @@ export const useErrorContent = (error: any) => {
   }, [error]);
 };
 
-const ErrorMessageExtra = memo<{ data: ChatMessage }>(({ data }) => {
+const ErrorMessageExtra = memo<{ data: UIChatMessage }>(({ data }) => {
   const error = data.error as ChatMessageError;
   if (!error?.type) return;
 
   switch (error.type) {
-    // TODO: 优化 Ollama setup 的流程，isDesktop 模式下可以直接做到端到端检测
     case AgentRuntimeErrorType.OllamaServiceUnavailable: {
-      return <OllamaSetupGuide />;
+      return <OllamaSetupGuide id={data.id} />;
     }
 
     case AgentRuntimeErrorType.OllamaBizError: {
@@ -113,19 +114,19 @@ const ErrorMessageExtra = memo<{ data: ChatMessage }>(({ data }) => {
 
     case AgentRuntimeErrorType.NoOpenAIAPIKey: {
       {
-        return <InvalidAPIKey id={data.id} provider={data.error?.body?.provider} />;
+        return <ChatInvalidAPIKey id={data.id} provider={data.error?.body?.provider} />;
       }
     }
   }
 
   if (error.type.toString().includes('Invalid')) {
-    return <InvalidAPIKey id={data.id} provider={data.error?.body?.provider} />;
+    return <ChatInvalidAPIKey id={data.id} provider={data.error?.body?.provider} />;
   }
 
   return <ErrorJsonViewer error={data.error} id={data.id} />;
 });
 
-export default memo<{ data: ChatMessage }>(({ data }) => (
+export default memo<{ data: UIChatMessage }>(({ data }) => (
   <Suspense
     fallback={
       <ErrorActionContainer>
